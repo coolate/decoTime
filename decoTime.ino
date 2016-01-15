@@ -31,6 +31,7 @@ int encoderSecPinB = 4;  //ENCODER2
 int startStopPin = 5;
 int resetTimerPin = 6;
 int ledDone = 7;
+int bellPin = 8;
 int led1 = 9;
 int led2 = 10;
 int led3 = 11;
@@ -42,6 +43,14 @@ int led8 = 16;
 long ledPreviousMillis = 0;        // will store last time LED was updated
 long ledInterval = 400;
 int ledDoneState = LOW;
+
+//preset buttons, using analog pins, and a digital. Ideally one could set up all 5 buttons on one alalog by using resistors. 
+char presetButton1pin = A1;  //analog 1
+char presetButton2pin = A2;  //analog 2
+char presetButton3pin = A3;  //analog 3
+char presetButton4pin = 0;  //digital 0, needed the analog 4 for SDA on expantion port
+char presetButton5pin = 1;  //digital 1, needed the analog 5 for SCL on expantion port
+
 //way to make dividing less processor intensive
 int led12Percent = 0; 
 int led25Percent = 0;
@@ -55,7 +64,10 @@ int led95Percent = 0;
 int startStopButtonState = 0;         // current state of the button
 int startStopLastButtonState = 0;     // previous state of the button
 int resetTimerButtonState = 0;         
-int resetTimerLastButtonState = 0;     
+int resetTimerLastButtonState = 0;  
+
+int bellRings = 3;
+int bellRingCount = 0;
 
 int encoderMinPinALast = LOW;
 int n = LOW;
@@ -120,6 +132,12 @@ void setup() {
   iochip.pinMode(led7, LOW);
   iochip.pinMode(led8, LOW);
   iochip.pinMode(ledDone, LOW);
+  iochip.pinMode(bellPin, LOW); 
+  pinMode(presetButton1pin, INPUT_PULLUP);
+  pinMode(presetButton2pin, INPUT_PULLUP);
+  pinMode(presetButton3pin, INPUT_PULLUP);
+  pinMode(presetButton4pin, INPUT_PULLUP);
+  pinMode(presetButton5pin, INPUT_PULLUP);
   
   Serial.begin (115200);
   
@@ -278,6 +296,7 @@ void loop() {
       // if the current state is HIGH then the button
       // went from off to on:
        timerGoing = 0;
+       bellRingCount = 0;
       //h,m,s or sec
       theClock.SetTimer(0,abs((int)min),abs((int)sec));
       totalSec = ((int)min*60) + (int)sec;
@@ -292,6 +311,34 @@ void loop() {
     }
   }
  resetTimerLastButtonState = resetTimerButtonState;
+ 
+
+ if(digitalRead(presetButton1pin) == LOW){
+   min = 0;
+   sec = 30;
+   Serial.println("Button 1 press");
+ }
+ if(digitalRead(presetButton2pin)==LOW){
+   min = 2;
+   sec = 0;
+   Serial.println("Button 2 press");
+ }
+ if(digitalRead(presetButton3pin)==LOW){
+   min = 3;
+   sec = 30;
+   Serial.println("Button 3 press");
+ }
+ if(digitalRead(presetButton4pin)==LOW){
+   min = 5;
+   sec = 0;
+   Serial.println("Button 4 press");
+ }
+ if(digitalRead(presetButton5pin)==LOW){
+   min = 15;
+   sec = 0;
+   Serial.println("Button 5 press");
+ }
+ 
  
  //=========================== The end of TIME =================================================================== 
  if(theClock.TimeCheck(0,0,0) && timerSet == 1){
@@ -317,6 +364,16 @@ void loop() {
       ledInterval = ledInterval * 2;
     }
   }
+  
+   //ring my bell bell bell, ring my bell
+    if(bellRingCount < bellRings)
+    {
+      iochip.digitalWrite(bellPin, HIGH);
+      bellRingCount++;
+      delay(50);
+      iochip.digitalWrite(bellPin, LOW);
+      delay(1000);
+    }
    
  }
  
@@ -385,5 +442,4 @@ void calculatePercents(int totalSeconds){
  led95Percent = (totalSeconds*95)/100;
   
 }
-
 
