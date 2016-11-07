@@ -23,10 +23,10 @@
 int maximum = 255;
 int minimum = 0;
 
-int encoderMinPinA = 2;  //ENCODER1
-int encoderMinPinB = 1;  //ENCODER1
-int encoderSecPinA = 3;  //ENCODER2
-int encoderSecPinB = 4;  //ENCODER2
+int encoderMinPinA = 3;  //ENCODER1
+int encoderMinPinB = 4;  //ENCODER1
+int encoderSecPinA = 2;  //ENCODER2
+int encoderSecPinB = 1;  //ENCODER2
 
 int startStopPin = 5;
 int resetTimerPin = 6;
@@ -64,7 +64,7 @@ int led95Percent = 0;
 int startStopButtonState = 0;         // current state of the button
 int startStopLastButtonState = 0;     // previous state of the button
 int resetTimerButtonState = 0;         
-int resetTimerLastButtonState = 0;  
+int resetTimerLastButtonState = 0; 
 
 int bellRings = 3;
 int bellRingCount = 0;
@@ -147,6 +147,8 @@ void setup() {
   
   motor1.setPosition(0);
   motor2.setPosition(0);
+  
+  iochip.digitalWrite(led1, HIGH);
 }
 
 //++++++++++++++++++++++++++++++++++++ LOOP +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  
@@ -168,7 +170,6 @@ void loop() {
           //motor2.updateBlocking();
           
           currentTotalSec = ((int)theClock.ShowMinutes()*60) + (int)theClock.ShowSeconds();
-          
           Serial.print(theClock.ShowHours());
           Serial.print(":");
           Serial.print(theClock.ShowMinutes());
@@ -237,7 +238,7 @@ void loop() {
         encoderSecPos = maximum;
       }
       else {
-        encoderSecPos++;
+        encoderSecPos++;  
       }
     }
   }
@@ -315,27 +316,37 @@ void loop() {
 
  if(digitalRead(presetButton1pin) == LOW){
    min = 0;
+   encoderMinPos = 0;
    sec = 30;
+   encoderSecPos = 30;
    Serial.println("Button 1 press");
  }
  if(digitalRead(presetButton2pin)==LOW){
    min = 2;
+   encoderMinPos = 2;
    sec = 0;
+   encoderSecPos = 0;
    Serial.println("Button 2 press");
  }
  if(digitalRead(presetButton3pin)==LOW){
    min = 3;
+   encoderMinPos = 3;
    sec = 30;
+   encoderSecPos = 30;
    Serial.println("Button 3 press");
  }
  if(digitalRead(presetButton4pin)==LOW){
    min = 5;
+   encoderMinPos = 5;
    sec = 0;
+   encoderSecPos = 0;
    Serial.println("Button 4 press");
  }
  if(digitalRead(presetButton5pin)==LOW){
-   min = 15;
-   sec = 0;
+    //min = 15;
+  // encoderMinPos = 15;
+ //  sec = 0;
+  // encoderSecPos = 0;
    Serial.println("Button 5 press");
  }
  
@@ -370,9 +381,9 @@ void loop() {
     {
       iochip.digitalWrite(bellPin, HIGH);
       bellRingCount++;
-      delay(50);
+      delay(5);
       iochip.digitalWrite(bellPin, LOW);
-      delay(1000);
+      delay(2000);
     }
    
  }
@@ -442,4 +453,3 @@ void calculatePercents(int totalSeconds){
  led95Percent = (totalSeconds*95)/100;
   
 }
-
