@@ -42,7 +42,7 @@ int led7 = 15;
 int led8 = 16;
 long ledPreviousMillis = 0;        // will store last time LED was updated
 long ledInterval = 400;
-int ledDoneState = LOW;
+int ledDoneState = HIGH;
 
 //preset buttons, using analog pins, and a digital. Ideally one could set up all 5 buttons on one alalog by using resistors. 
 char presetButton1pin = A1;  //analog 1
@@ -148,7 +148,8 @@ void setup() {
   motor1.setPosition(0);
   motor2.setPosition(0);
   
-  iochip.digitalWrite(led1, HIGH);
+  //iochip.digitalWrite(led1, HIGH);
+  iochip.digitalWrite(ledDone, ledDoneState);
 }
 
 //++++++++++++++++++++++++++++++++++++ LOOP +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  
@@ -165,7 +166,7 @@ void loop() {
         {
           motor1.setPosition(abs(15.75*theClock.ShowSeconds()));
           // motor2.setPosition(900);
-          motor2.setPosition(60*theClock.ShowMinutes());
+          motor2.setPosition(calculateMinPos(theClock.ShowMinutes()));
           //motor1.updateBlocking();
           //motor2.updateBlocking();
           
@@ -184,9 +185,10 @@ void loop() {
   else
   {
     sec = encoderSecPos;
-    min = encoderMinPos/17;
+    
+    min = calculateMinEncoderVal(encoderMinPos);   //255 max set earlyer
     motor1.setPosition(abs(15.75*sec));
-    motor2.setPosition(60*min);
+    motor2.setPosition(calculateMinPos(min));
    // motor1.updateBlocking();
     //motor2.updateBlocking();
   }
@@ -263,6 +265,8 @@ void loop() {
       if(timerSet == 0){
         timerSet = 1;
         timerGoing = 1;
+        ledDoneState = LOW;
+        iochip.digitalWrite(ledDone, ledDoneState);
         theClock.SetTimer(0,abs((int)min),abs((int)sec));
         totalSec = ((int)min*60) + (int)sec;
         calculatePercents(totalSec);
@@ -453,3 +457,41 @@ void calculatePercents(int totalSeconds){
  led95Percent = (totalSeconds*95)/100;
   
 }
+
+//=========================== calculateMinPos  =================================================================== 
+ //this will take time in min and turn it into a value for servo in the range of 0-312
+ //315 degrees of range = 315x3 steps = 945 steps
+int calculateMinPos(int currentMin){
+    int stepValue=0;
+    if (currentMin<=5){            //for first 1/4 covered by 5 min
+        stepValue= abs((int)currentMin*47);      
+    }
+    else if (currentMin > 5 && currentMin <=35){    //for middle 1/2
+        stepValue = abs((int)236.25 + (15.75*(currentMin-5))); 
+    }
+    else if (currentMin>35){
+        stepValue = abs((int)708.75 + (9.45*(currentMin-35)));
+    }
+    return stepValue;
+ }
+
+//=========================== calculateMinEncoderVal  =================================================================== 
+ //this will take the encoder value and turn in into min for the dial I made. The first 5 min take more turn then the next
+ //and so forth.
+ //255
+int calculateMinEncoderVal(int encoderPos){
+    int minVal=0;
+    
+    if (encoderPos<=40){            //for first 1/4 covered by 5 min
+        minVal= encoderPos/8;      
+    }
+    else if (encoderPos > 40 && encoderPos <= 160){    //for middle 1/2 5-35 min
+        minVal = (encoderPos-20)/4;
+    }
+    else if (encoderPos>160){           //for 35 over
+        minVal = (encoderPos-55)/3;
+    }
+    
+    //minVal = encoderPos/4;
+    return minVal;
+ }
