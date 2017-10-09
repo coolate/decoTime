@@ -1,7 +1,7 @@
 /*********************************************************************************************
  Project: Deco Tea timer
  By: Andy Evans 
- Date: 8/12/2015
+ Date: 8/12/2015 - 10/9/2017
  This is a retor tea timer that usese speedometer steppers (switecx25) to show the time. 
  It uses two rotery encoders with push buttons to set the time, and a number
  of leds to show the percent left. When finished it will rinf a bell and 
@@ -48,8 +48,8 @@ int ledDoneState = HIGH;
 char presetButton1pin = A1;  //analog 1
 char presetButton2pin = A2;  //analog 2
 char presetButton3pin = A3;  //analog 3
-char presetButton4pin = 0;  //digital 0, needed the analog 4 for SDA on expantion port
-char presetButton5pin = 1;  //digital 1, needed the analog 5 for SCL on expantion port
+char presetButton4pin = 1;  //digital 0, needed the analog 4 for SDA on expantion port
+char presetButton5pin = 0;  //digital 1, needed the analog 5 for SCL on expantion port
 
 //way to make dividing less processor intensive
 int led12Percent = 0; 
@@ -139,17 +139,9 @@ void setup() {
   pinMode(presetButton4pin, INPUT_PULLUP);
   pinMode(presetButton5pin, INPUT_PULLUP);
   
-  Serial.begin (115200);
+//  Serial.begin (115200);
+  startUpTest();
   
-  // run both motors against stops to re-zero
-  motor1.zero();   // this is a slow, blocking operation
-  motor2.zero();
-  
-  motor1.setPosition(0);
-  motor2.setPosition(0);
-  
-  //iochip.digitalWrite(led1, HIGH);
-  iochip.digitalWrite(ledDone, ledDoneState);
 }
 
 //++++++++++++++++++++++++++++++++++++ LOOP +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  
@@ -171,13 +163,13 @@ void loop() {
           //motor2.updateBlocking();
           
           currentTotalSec = ((int)theClock.ShowMinutes()*60) + (int)theClock.ShowSeconds();
-          Serial.print(theClock.ShowHours());
-          Serial.print(":");
-          Serial.print(theClock.ShowMinutes());
-          Serial.print(":");
-          Serial.print(theClock.ShowSeconds());
-          Serial.print(":");
-          Serial.println(theClock.ShowMilliSeconds());
+          //Serial.print(theClock.ShowHours());
+          //Serial.print(":");
+          //Serial.print(theClock.ShowMinutes());
+          //Serial.print(":");
+          //Serial.print(theClock.ShowSeconds());
+          //Serial.print(":");
+          //Serial.println(theClock.ShowMilliSeconds());
           // This DOES NOT format the time to 0:0x when seconds is less than 10.
           // if you need to format the time to standard format, use the sprintf() function.
         }
@@ -185,7 +177,6 @@ void loop() {
   else
   {
     sec = encoderSecPos;
-    
     min = calculateMinEncoderVal(encoderMinPos);   //255 max set earlyer
     motor1.setPosition(abs(15.75*sec));
     motor2.setPosition(calculateMinPos(min));
@@ -218,7 +209,7 @@ void loop() {
  
   if(encoderMinPos != encoderMinPosLast)
   {
-    Serial.println ((String)encoderMinPos);
+    //Serial.println ((String)encoderMinPos);
     encoderMinPosLast = encoderMinPos;
   }
   encoderMinPinALast = n;
@@ -248,7 +239,7 @@ void loop() {
  
   if(encoderSecPos != encoderSecPosLast)
   {
-    Serial.println (encoderSecPos);
+    //Serial.println (encoderSecPos);
     encoderSecPosLast = encoderSecPos;
   }
   encoderSecPinALast = o;
@@ -317,44 +308,36 @@ void loop() {
   }
  resetTimerLastButtonState = resetTimerButtonState;
  
+ //=========================== Preset BUTTONS =====================
+  if(timerGoing == 0){
+      if(digitalRead(presetButton1pin) == LOW){
+         min = 0;
+        sec = 30;
+        setEncodersPos(min, sec);
+      }
+    if(digitalRead(presetButton2pin)==LOW){
+      min = 2;
+      sec = 0;
+      setEncodersPos(min, sec);
+    }
+    if(digitalRead(presetButton3pin)==LOW){
+      min = 3;
+      sec = 30;
+      setEncodersPos(min, sec);
+    }
+    if(digitalRead(presetButton4pin)==LOW){
+      min = 5;
+      sec = 0;
+      setEncodersPos(min, sec);
+    }
+    if(digitalRead(presetButton5pin)==LOW){
+       min = 15;
+       sec = 0;
+       setEncodersPos(min, sec);
+     }
+  }
+ 
 
- if(digitalRead(presetButton1pin) == LOW){
-   min = 0;
-   encoderMinPos = 0;
-   sec = 30;
-   encoderSecPos = 30;
-   Serial.println("Button 1 press");
- }
- if(digitalRead(presetButton2pin)==LOW){
-   min = 2;
-   encoderMinPos = 2;
-   sec = 0;
-   encoderSecPos = 0;
-   Serial.println("Button 2 press");
- }
- if(digitalRead(presetButton3pin)==LOW){
-   min = 3;
-   encoderMinPos = 3;
-   sec = 30;
-   encoderSecPos = 30;
-   Serial.println("Button 3 press");
- }
- if(digitalRead(presetButton4pin)==LOW){
-   min = 5;
-   encoderMinPos = 5;
-   sec = 0;
-   encoderSecPos = 0;
-   Serial.println("Button 4 press");
- }
- if(digitalRead(presetButton5pin)==LOW){
-    //min = 15;
-  // encoderMinPos = 15;
- //  sec = 0;
-  // encoderSecPos = 0;
-   Serial.println("Button 5 press");
- }
- 
- 
  //=========================== The end of TIME =================================================================== 
  if(theClock.TimeCheck(0,0,0) && timerSet == 1){
    
@@ -387,6 +370,8 @@ void loop() {
       bellRingCount++;
       delay(5);
       iochip.digitalWrite(bellPin, LOW);
+      motor1.updateBlocking();
+      motor2.updateBlocking();
       delay(2000);
     }
    
@@ -495,3 +480,86 @@ int calculateMinEncoderVal(int encoderPos){
     //minVal = encoderPos/4;
     return minVal;
  }
+
+//=========================== setEncodersPos  =================================================================== 
+ //This will set the encoders positions to the current values
+ // this will let the preset buttons be able to be tweaked without going back to the last encoder locations
+ // the min encoder math is more complicated, see above function for reverse.
+ // 
+void setEncodersPos(int newMin, int newSec){
+    encoderSecPos = newSec;
+    encoderSecPosLast= newSec;
+    if (newMin<=5){            //for first 1/4 covered by 5 min
+        encoderMinPos = (newMin *8);
+        encoderMinPosLast = (newMin *8);     
+    }
+    else if (newMin > 5 && newMin <=35){    //for middle 1/2
+        encoderMinPos = (newMin *4)+20;
+        encoderMinPosLast = (newMin *4)+20;
+    }
+    else if (newMin>35){
+        encoderMinPos = (newMin *3)+55;
+        encoderMinPosLast = (newMin *3)+55;
+    }
+    
+ }
+
+ //=========================== startUpTest  =================================================================== 
+ // This will run the start up test to see if all the LEDs work and center the servos
+ // 
+ // 
+ // 
+void startUpTest(){
+  int ledDelay = 50;
+    // run both motors against stops to re-zero
+  motor1.zero();   // this is a slow, blocking operation
+  motor2.zero();
+  
+  motor1.setPosition(945);
+  motor2.setPosition(945);
+  
+  motor1.updateBlocking();
+  motor2.updateBlocking();
+  
+  iochip.digitalWrite(led1, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led2, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led3, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led4, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led5, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led6, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led7, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(led8, HIGH);
+  delay(ledDelay);
+  iochip.digitalWrite(ledDone, ledDoneState);
+  delay(ledDelay);
+  iochip.digitalWrite(led1, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led2, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led3, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led4, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led5, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led6, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led7, LOW);
+  delay(ledDelay);
+  iochip.digitalWrite(led8, LOW);
+  
+  motor1.setPosition(0);
+  motor2.setPosition(0);
+  
+  motor1.update();
+  motor2.update();
+    
+ }
+ 
