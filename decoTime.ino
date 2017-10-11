@@ -1,55 +1,62 @@
-/*********************************************************************************************
- Project: Deco Tea timer
- By: Andy Evans 
- Date: 8/12/2015 - 10/9/2017
- This is a retor tea timer that usese speedometer steppers (switecx25) to show the time. 
+
+/***************************************************************************************************
+ Project: DecoTime angular tea timer
+ By: Andy T. Evans 
+ Date: 8/12/2015 - 10/10/2017
+ Website: http:\\www.coolate.com
+ Description: This is a retro tea timer that usese speedometer steppers (switecx25) to show the time. 
  It uses two rotery encoders with push buttons to set the time, and a number
- of leds to show the percent left. When finished it will rinf a bell and 
- flash an LED. It does this all via a MCP23S17 chip.
+ of leds to show the percent left. When finished it will ring a bell and 
+ flash an LED. It does this all via a MCP23S17 chip. It also has preset buttons that can 
+ be held to save the current values to that button.
+ 
  INCLUDES: 
  -MCP23S17 - http://playground.arduino.cc/Main/MCP23S17
  -UP/Down Timer - http://playground.arduino.cc/Main/CountUpDownTimer
  -switecX25 - https://github.com/clearwater/SwitecX25
+ -OneButton - https://github.com/mathertel/OneButton   
  -SPI - https://www.arduino.cc/en/Reference/SPI
-***********************************************************************************************/
+ -EEPROM - https://www.arduino.cc/en/Reference/EEPROM
+****************************************************************************************************/
 
 #include "SwitecX25.h"
 #include "CountUpDownTimer.h"
 #include <SPI.h>              // We use this library, so it must be called here.
 #include <MCP23S17.h>         // Here is the new class to make using the MCP23S17 easy.
-
+#include <OneButton.h>       // handy button lib, does debounce and long press making code easy to read
+#include <EEPROM.h>          // Lets us save changed presets
 
 //Rotary Encoder Max/Min
-int maximum = 255;
-int minimum = 0;
+#define maximum 255
+#define minimum 0
 
-int encoderMinPinA = 3;  //ENCODER1
-int encoderMinPinB = 4;  //ENCODER1
-int encoderSecPinA = 2;  //ENCODER2
-int encoderSecPinB = 1;  //ENCODER2
+#define encoderMinPinA 3  //ENCODER1
+#define encoderMinPinB 4  //ENCODER1
+#define encoderSecPinA 2  //ENCODER2
+#define encoderSecPinB 1  //ENCODER2
+#define startStopPin 5
+#define resetTimerPin 6
+#define ledDone 7
+#define bellPin 8
+#define led1 9
+#define led2 10
+#define led3 11
+#define led4 12
+#define led5 13
+#define led6 14
+#define led7 15
+#define led8 16
 
-int startStopPin = 5;
-int resetTimerPin = 6;
-int ledDone = 7;
-int bellPin = 8;
-int led1 = 9;
-int led2 = 10;
-int led3 = 11;
-int led4 = 12;
-int led5 = 13;
-int led6 = 14;
-int led7 = 15;
-int led8 = 16;
 long ledPreviousMillis = 0;        // will store last time LED was updated
 long ledInterval = 400;
 int ledDoneState = HIGH;
 
 //preset buttons, using analog pins, and a digital. Ideally one could set up all 5 buttons on one alalog by using resistors. 
-char presetButton1pin = A1;  //analog 1
-char presetButton2pin = A2;  //analog 2
-char presetButton3pin = A3;  //analog 3
-char presetButton4pin = 1;  //digital 0, needed the analog 4 for SDA on expantion port
-char presetButton5pin = 0;  //digital 1, needed the analog 5 for SCL on expantion port
+OneButton presetButton1(A1, true);    //analog 1
+OneButton presetButton2(A2, true);
+OneButton presetButton3(A3, true);
+OneButton presetButton4(1, true);     //digital 0, needed the analog 4 for SDA on expantion port
+OneButton presetButton5(0, true);     //digital 1, needed the analog 5 for SCL on expantion port
 
 //way to make dividing less processor intensive
 int led12Percent = 0; 
@@ -96,8 +103,30 @@ float sec = 30;
 int totalSec = 0;
 int currentTotalSec = 0;
 
+//set the default presets here, they can be over written when 
+//button held down and new value saved.
+byte preSetMin1 = 0;
+byte preSetSec1 = 30;
+byte preSetMin2 = 2;
+byte preSetSec2 = 15;
+byte preSetMin3 = 3;
+byte preSetSec3 = 30;
+byte preSetMin4 = 5;
+byte preSetSec4 = 10;
+byte preSetMin5 = 15;
+byte preSetSec5 = 20;
+
+//version number really only used for EEPROM checking, make it different to re-write default presets.
+//1-254 do not pick 0 or 255 as they can mean "blank" in some peoples use of the EEPROM
+byte decoVersion = 49;
+byte decoVersionSaved = 0;
+int versionAddress = 211;
+
 //================================ SETUP ===================================================================  
 void setup() {
+
+  //load decoVersion from EEPROM 
+  decoVersionSaved = EEPROM.read(versionAddress);
   
   iochip.pinMode(1, HIGH);      // Use bit-write mode to set the pin as an input (inputs are logic level 1)
   iochip.pullupMode(1, HIGH);   // Use bit-write mode to Turn on the internal pull-up resistor on the pin
@@ -133,13 +162,44 @@ void setup() {
   iochip.pinMode(led8, LOW);
   iochip.pinMode(ledDone, LOW);
   iochip.pinMode(bellPin, LOW); 
-  pinMode(presetButton1pin, INPUT_PULLUP);
-  pinMode(presetButton2pin, INPUT_PULLUP);
-  pinMode(presetButton3pin, INPUT_PULLUP);
-  pinMode(presetButton4pin, INPUT_PULLUP);
-  pinMode(presetButton5pin, INPUT_PULLUP);
   
-//  Serial.begin (115200);
+  //old way not using oneButton.h
+  //pinMode(presetButton1pin, INPUT_PULLUP);
+  
+   // link the presetButton 1 functions.
+  presetButton1.attachClick(pressPresetButton1);
+  //presetButton1.attachDoubleClick(doubleclick1);
+  presetButton1.attachLongPressStart(longPressStart);
+  presetButton1.attachLongPressStop(longPressStopPresetButton1);
+  //presetButton1.attachDuringLongPress(longPress1);
+  presetButton1.setPressTicks(3000);   //sets the long click to 3 sec
+
+  presetButton2.attachClick(pressPresetButton2);
+  presetButton2.attachLongPressStart(longPressStart);
+  presetButton2.attachLongPressStop(longPressStopPresetButton2);
+  presetButton2.setPressTicks(3000);   //sets the long click to 3 sec
+
+  presetButton3.attachClick(pressPresetButton3);
+  presetButton3.attachLongPressStart(longPressStart);
+  presetButton3.attachLongPressStop(longPressStopPresetButton3);
+  presetButton3.setPressTicks(3000);   //sets the long click to 3 sec
+
+  presetButton4.attachClick(pressPresetButton4);
+  presetButton4.attachLongPressStart(longPressStart);
+  presetButton4.attachLongPressStop(longPressStopPresetButton4);
+  presetButton4.setPressTicks(3000);   //sets the long click to 3 sec
+
+  presetButton5.attachClick(pressPresetButton5);
+  presetButton5.attachLongPressStart(longPressStart);
+  presetButton5.attachLongPressStop(longPressStopPresetButton5);
+  presetButton5.setPressTicks(3000);   //sets the long click to 3 sec
+
+  //will make sure epprom values for the preset buttons have been set with the defaults, if not manually set.
+  updatePresetEEPROM();
+  
+  //Serial.begin (115200);
+  
+  //displays a test and syncs the servos
   startUpTest();
   
 }
@@ -149,6 +209,11 @@ void loop() {
   // update motors frequently to allow them to step
   motor1.update();
   motor2.update();
+  presetButton1.tick();
+  presetButton2.tick();
+  presetButton3.tick();
+  presetButton4.tick();
+  presetButton5.tick();
  
 //=========================== timer logic ===================================================================   
   if(timerGoing==1)
@@ -307,35 +372,6 @@ void loop() {
     }
   }
  resetTimerLastButtonState = resetTimerButtonState;
- 
- //=========================== Preset BUTTONS =====================
-  if(timerGoing == 0){
-      if(digitalRead(presetButton1pin) == LOW){
-         min = 0;
-        sec = 30;
-        setEncodersPos(min, sec);
-      }
-    if(digitalRead(presetButton2pin)==LOW){
-      min = 2;
-      sec = 0;
-      setEncodersPos(min, sec);
-    }
-    if(digitalRead(presetButton3pin)==LOW){
-      min = 3;
-      sec = 30;
-      setEncodersPos(min, sec);
-    }
-    if(digitalRead(presetButton4pin)==LOW){
-      min = 5;
-      sec = 0;
-      setEncodersPos(min, sec);
-    }
-    if(digitalRead(presetButton5pin)==LOW){
-       min = 15;
-       sec = 0;
-       setEncodersPos(min, sec);
-     }
-  }
  
 
  //=========================== The end of TIME =================================================================== 
@@ -562,4 +598,150 @@ void startUpTest(){
   motor2.update();
     
  }
+
+ //=========================== PreSet Button functions =================================================================== 
+ //This will set the encoders positions to the current values
  
+void pressPresetButton1(){
+    if(timerGoing == 0){
+       min = preSetMin1;
+       sec = preSetSec1;
+       setEncodersPos(min, sec);  
+     }
+}
+void pressPresetButton2(){
+    if(timerGoing == 0){
+       min = preSetMin2;
+       sec = preSetSec2;
+       setEncodersPos(min, sec);  
+    }
+}
+void pressPresetButton3(){
+    if(timerGoing == 0){
+       min = preSetMin3;
+       sec = preSetSec3;
+       setEncodersPos(min, sec);  
+     }
+}
+void pressPresetButton4(){
+    if(timerGoing == 0){
+       min = preSetMin4;
+       sec = preSetSec4;
+       setEncodersPos(min, sec);  
+    }
+}  
+ void pressPresetButton5(){
+    if(timerGoing == 0){
+       min = preSetMin5;
+       sec = preSetSec5;
+       setEncodersPos(min, sec);  
+     }
+ }
+//-------- Long holds of presets-------------------------------
+//these will save the current time to the EEPROM and blink to let you know it's saving
+  void longPressStart(){
+    if(timerGoing == 0){
+       iochip.digitalWrite(ledDone, LOW);  
+    }
+ }
+ 
+ void longPressStopPresetButton1(){
+    if(timerGoing == 0){
+      EEPROM.update(10, min);
+      EEPROM.update(15, sec);
+      preSetMin1 = min;
+      preSetSec1 = sec;
+      iochip.digitalWrite(ledDone, HIGH);
+      delay(75); 
+      iochip.digitalWrite(ledDone, LOW);
+      delay(75);
+      iochip.digitalWrite(ledDone, HIGH); 
+    }
+ }
+void longPressStopPresetButton2(){
+  
+   if(timerGoing == 0){
+      EEPROM.update(20, min);
+      EEPROM.update(25, sec);
+      preSetMin2 = min;
+      preSetSec2 = sec;
+     iochip.digitalWrite(ledDone, HIGH);
+      delay(75); 
+      iochip.digitalWrite(ledDone, LOW);
+      delay(75);
+      iochip.digitalWrite(ledDone, HIGH);  
+    }
+}
+void longPressStopPresetButton3(){
+  if(timerGoing == 0){
+      EEPROM.update(30, min);
+      EEPROM.update(35, sec);
+      preSetMin3 = min;
+      preSetSec3 = sec;
+     iochip.digitalWrite(ledDone, HIGH);
+      delay(75); 
+      iochip.digitalWrite(ledDone, LOW);
+      delay(75);
+      iochip.digitalWrite(ledDone, HIGH); 
+  }
+}
+void longPressStopPresetButton4(){
+   if(timerGoing == 0){
+      EEPROM.update(40, min);
+      EEPROM.update(45, sec);
+      preSetMin4 = min;
+      preSetSec4 = sec;
+       iochip.digitalWrite(ledDone, HIGH);
+      delay(75); 
+      iochip.digitalWrite(ledDone, LOW);
+      delay(75);
+      iochip.digitalWrite(ledDone, HIGH);  
+    }
+}
+void longPressStopPresetButton5(){
+   if(timerGoing == 0){
+      EEPROM.update(50, min);
+      EEPROM.update(55, sec);
+      preSetMin5 = min;
+      preSetSec5 = sec;
+       iochip.digitalWrite(ledDone, HIGH);
+      delay(75); 
+      iochip.digitalWrite(ledDone, LOW);
+      delay(75);
+      iochip.digitalWrite(ledDone, HIGH);  
+   }
+}
+
+//-------- updatePresetEEPROM -------------------------------
+//Will check the decoVersion against what is saved in the EEPROM 
+// and if it does not match update the EEPROM with defaults, if it does,
+//it will load the values stored in the EEPROM.
+void updatePresetEEPROM(){
+    if(decoVersionSaved == decoVersion){     //has been written before
+        //load preset times from EEPROM 
+        preSetMin1 = EEPROM.read(10);
+        preSetSec1 = EEPROM.read(15);
+        preSetMin2 = EEPROM.read(20);
+        preSetSec2 = EEPROM.read(25);
+        preSetMin3 = EEPROM.read(30);
+        preSetSec3 = EEPROM.read(35);
+        preSetMin4 = EEPROM.read(40);
+        preSetSec4 = EEPROM.read(45);
+        preSetMin5 = EEPROM.read(50);
+        preSetSec5 = EEPROM.read(55);
+    }
+    else{                                 //has not
+        EEPROM.update(10, preSetMin1);
+        EEPROM.update(15, preSetSec1);
+        EEPROM.update(20, preSetMin2);
+        EEPROM.update(25, preSetSec2);
+        EEPROM.update(30, preSetMin3);
+        EEPROM.update(35, preSetSec3);
+        EEPROM.update(40, preSetMin4);
+        EEPROM.update(45, preSetSec4);
+        EEPROM.update(50, preSetMin5);
+        EEPROM.update(55, preSetSec5);
+        EEPROM.update(versionAddress, decoVersion);
+    }
+}
+
